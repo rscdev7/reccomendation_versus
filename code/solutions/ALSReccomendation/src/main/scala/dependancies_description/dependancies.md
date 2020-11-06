@@ -4,6 +4,8 @@
 > **Dependancies:**
 > * MovieLensLoader
 > * ALSWrangler
+> * ALSTrainer
+> * ALSWriter
 -----
 ####**Data Dependancies:**
 > **Dependancies:**

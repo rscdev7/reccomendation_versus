@@ -2,7 +2,7 @@
 @author    :     rscalia
 @date      :     Wed 04/11/2020
 
-Questo componente serve per effettuare il Wrangling necessario all'algoritmo ALS.
+Questa classe serve per effettuare il Wrangling necessario all'algoritmo ALS.
 */
 
 
@@ -33,10 +33,10 @@ class ALSWrangler  {
     def wrangle (pDataLake:Dataset[Row]): Unit = {
         val arr:Array[Dataset[Row]] = pDataLake.randomSplit(Array(0.8, 0.2), seed=2014554)
 
-        _trainingSet = Some(arr(0))
-        _testSet     = Some(arr(1))
+        _trainingSet                = Some(arr(0))
+        _testSet                    = Some(arr(1))
 
-        _originalDatasetLen = pDataLake.count
+        _originalDatasetLen         = pDataLake.count
     }
 
     def printDataSplitsProperties = {

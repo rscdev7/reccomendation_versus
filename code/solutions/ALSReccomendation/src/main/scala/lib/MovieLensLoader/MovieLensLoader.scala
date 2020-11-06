@@ -2,7 +2,7 @@
 @author    :     rscalia
 @date      :     Sun 01/11/2020
 
-Questo componente serve per leggere il dataset MovieLens dal file system distribuito.
+Questa classe serve per leggere il dataset MovieLens dal file system distribuito.
 */
 
 package lib.MovieLensLoader 
@@ -17,11 +17,11 @@ class MovieLensLoader (val _dataPath:String, val _spark:SparkSession) {
 
 
     def loadData: Unit = {
-        val tmp_data_lake = _spark.read.option("header",false).option("delimiter","_").csv(_dataPath).toDF("user_id","movie_id","label","timestamp")
+        val tmp_data_lake       = _spark.read.option("header",false).option("delimiter","_").csv(_dataPath).toDF("user_id","movie_id","label","timestamp")
         
-        val cast_tmp_data_lake = tmp_data_lake.select (tmp_data_lake("user_id").cast("int"), tmp_data_lake("movie_id").cast("int"), tmp_data_lake ("label").cast("int"), tmp_data_lake("timestamp").cast("long"))
+        val cast_tmp_data_lake  = tmp_data_lake.select (tmp_data_lake("user_id").cast("int"), tmp_data_lake("movie_id").cast("int"), tmp_data_lake ("label").cast("int"), tmp_data_lake("timestamp").cast("long"))
 
-        _dataLake = Some(cast_tmp_data_lake)
+        _dataLake               = Some(cast_tmp_data_lake)
     }
 
 
@@ -34,9 +34,9 @@ class MovieLensLoader (val _dataPath:String, val _spark:SparkSession) {
 
     def checkDataIntegrity : Unit = {
         
-        val integrity = _dataLake.get.filter ( (row) => row.getInt(0) == null || row.getInt(1) == null || row.getInt(2) == null|| row.getLong(3) == null || row.getInt(2) < 0 || row.getInt(2) > 5 || row.getLong(3) <0) 
+        val integrity   = _dataLake.get.filter ( (row) => row.getInt(0) == null || row.getInt(1) == null || row.getInt(2) == null|| row.getLong(3) == null || row.getInt(2) < 0 || row.getInt(2) > 5 || row.getLong(3) <0) 
 
-        val n_record = integrity.count()
+        val n_record    = integrity.count()
 
         n_record match {
             case i if i == 0 => println ("[!] Dataset is ok")

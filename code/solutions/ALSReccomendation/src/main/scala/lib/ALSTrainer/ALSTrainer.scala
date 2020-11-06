@@ -1,3 +1,12 @@
+/*
+@author    :     rscalia
+@date      :     Wed 04/11/2020
+
+Questa classe serve per addestrare un Modello LFM usando l'algoritmo ALS.
+
+In tale procedura, è prevista anche la fase di Tuning degli Iperparametri.
+*/
+
 package lib.ALSTrainer
 
 import scala.math._
@@ -25,8 +34,9 @@ class ALSTrainer (val _iterations:Array[Int], val _regularization:Array[Double],
 
     var _model:Option[CrossValidatorModel] = None
 
+
     def train (pDataset:Dataset[Row]) = {
-        val model = new ALS ()
+        val model     = new ALS ()
 
         model
         .setUserCol(_userCol)
@@ -45,14 +55,16 @@ class ALSTrainer (val _iterations:Array[Int], val _regularization:Array[Double],
  
 
         val cv        = new CrossValidator()
+                            .setCollectSubModels(true)
                             .setEstimator(model)
                             .setEvaluator(ev)
                             .setEstimatorParamMaps(paramGrid)
-                            .setNumFolds(3)  
+                            .setNumFolds(2)  
                             .setParallelism(8) 
+                           
+
 
         _model        = Some( cv.fit(pDataset) )
-
     }
 
 
