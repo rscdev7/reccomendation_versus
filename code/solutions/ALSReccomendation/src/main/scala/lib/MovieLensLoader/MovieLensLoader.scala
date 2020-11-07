@@ -2,7 +2,7 @@
 @author    :     rscalia
 @date      :     Sun 01/11/2020
 
-Questa classe serve per leggere il dataset MovieLens dal file system distribuito.
+Questa classe serve per leggere il dataset MovieLens-1M dal file system distribuito.
 */
 
 package lib.MovieLensLoader 
@@ -25,22 +25,22 @@ class MovieLensLoader (val _dataPath:String, val _spark:SparkSession) {
     }
 
 
-    def printData:Unit = {
+    def printDataPath:Unit = {
         println ("\n******************** DATA LOADER CONFIG ***********************\n")
         println (s"-> DataPath: ${_dataPath} ")   
         println ("\n***************************************************************\n")
     }
 
 
-    def checkDataIntegrity : Unit = {
+    def checkDataIntegrity : Boolean = {
         
         val integrity   = _dataLake.get.filter ( (row) => row.getInt(0) == null || row.getInt(1) == null || row.getInt(2) == null|| row.getLong(3) == null || row.getInt(2) < 0 || row.getInt(2) > 5 || row.getLong(3) <0) 
 
         val n_record    = integrity.count()
 
         n_record match {
-            case i if i == 0 => println ("[!] Dataset is ok")
-            case i if i > 0  => println (s"[!] Error, there is some thing wrong on your data <-> N_Rec: ${n_record}")
+            case i if i == 0 => true
+            case i if i > 0  => false 
         }
     }
     

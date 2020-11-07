@@ -2,7 +2,7 @@
 @author    :     rscalia
 @date      :     Wed 04/11/2020
 
-Questa classe serve per effettuare il Wrangling necessario all'algoritmo ALS.
+Questa classe serve per effettuare il Wrangling dei Dati necessario all'algoritmo ALS.
 */
 
 

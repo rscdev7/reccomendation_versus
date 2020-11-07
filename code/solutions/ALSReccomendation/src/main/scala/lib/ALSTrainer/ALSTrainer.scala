@@ -4,7 +4,7 @@
 
 Questa classe serve per addestrare un Modello LFM usando l'algoritmo ALS.
 
-In tale procedura, è prevista anche la fase di Tuning degli Iperparametri.
+In tale procedura, è prevista anche la fase di Tuning degli Iperparametri (Validation).
 */
 
 package lib.ALSTrainer
@@ -28,8 +28,10 @@ import org.apache.spark.ml.evaluation.RegressionEvaluator
 import org.apache.spark.ml.tuning.{ParamGridBuilder, CrossValidator, CrossValidatorModel}
 
 
-class ALSTrainer (val _iterations:Array[Int], val _regularization:Array[Double], val _userCol:String, 
-                  val _itemCol:String      , val _ratingCol:String 
+class ALSTrainer (val _iterations:Array[Int], val _regularization:Array[Double], 
+                  val _rank:Array[Int]     , val _fold:Int, 
+                  val _seed:Long            , val _userCol:String, 
+                  val _itemCol:String       , val _ratingCol:String 
                  ) {
 
     var _model:Option[CrossValidatorModel] = None
@@ -42,12 +44,14 @@ class ALSTrainer (val _iterations:Array[Int], val _regularization:Array[Double],
         .setUserCol(_userCol)
         .setItemCol(_itemCol)
         .setRatingCol(_ratingCol)
+        .setSeed(_seed)
         .setColdStartStrategy("drop")
 
 
         val paramGrid = new ParamGridBuilder()
-                            .addGrid(model.maxIter, _iterations)
-                            .addGrid(model.regParam, _regularization)
+                            .addGrid ( model.maxIter  , _iterations     )
+                            .addGrid ( model.regParam , _regularization )
+                            .addGrid ( model.rank     , _rank           )
                             .build()
 
         val ev        = new RegressionEvaluator ()
@@ -59,7 +63,7 @@ class ALSTrainer (val _iterations:Array[Int], val _regularization:Array[Double],
                             .setEstimator(model)
                             .setEvaluator(ev)
                             .setEstimatorParamMaps(paramGrid)
-                            .setNumFolds(2)  
+                            .setNumFolds(_fold)  
                             .setParallelism(8) 
                            
 

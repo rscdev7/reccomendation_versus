@@ -20,7 +20,6 @@ import scala.reflect._
 
 import org.apache.spark.sql._
 
-
 import lib.MovieLensLoader._
 import lib.ALSWrangler._
 import lib.ALSTrainer._
@@ -32,41 +31,57 @@ object Main {
   def main(args: Array[String]): Unit = {
 
     //Creazione Spark Session
-    val spark = SparkSession.builder.appName("Spark App Name").getOrCreate()
+    val spark                     = SparkSession.builder.appName("ALSReccomendation").getOrCreate()
     import spark.implicits._
 
 
 
-    //Test classe MovieLensLoader
-    val DATA_PATH = "hdfs://localhost:9000/dataset/ml-1m-csv/ratings.csv"
+    //Caricamento dataset "in memoria"
+    val DATA_PATH                 = "hdfs://localhost:9000/dataset/ml-1m-csv/ratings.csv"
 
-    val loader = new MovieLensLoader (DATA_PATH, spark)
-
-    loader.printData
+    val loader                    = new MovieLensLoader (DATA_PATH, spark)
+    loader.printDataPath
     loader.loadData
-    loader.checkDataIntegrity
 
+    val result                    = loader.checkDataIntegrity
+
+    result match {
+      case false => {
+                        println ("[!] Your data is corrupted \n")
+                        return
+                    }
+            
+      case true =>  {
+                      println ("[!] Your data is Correct \n")
+                    }   
+    }
+    
     loader._dataLake.get.printSchema()
 
 
-    //Test classe ALSWrangler
-    val wrg = new ALSWrangler ();
-
+    //Wrangling dei Dati
+    val wrg                       = new ALSWrangler ();
     wrg.wrangle(loader._dataLake.get)
     wrg.printDataSplitsProperties
 
     
-    //Test classe ALSTrainer
-    val als = new ALSTrainer(Array(5,10), Array(0.99), "user_id", "movie_id","label")
+    //Training Modello LFM sfruttando l'algoritmo ALS
+    val SEED:Long                 = 12345678
+    val MAX_ITER                  = Array (5,10,20)
+    val REG_PARAM                 = Array (0.99,0.90,0.80)
+    val RANK                      = Array (5,10,20)
+    val FOLD                      = 10
+    
+    val als                       = new ALSTrainer(MAX_ITER, REG_PARAM, RANK, FOLD, SEED ,"user_id", "movie_id","label")
     als.train( wrg._trainingSet.get )
 
 
-    //Test Classe ALSDataWriter
-    val wr                        = new ALSDataWriter (spark)
+    //Writing del risultato dell'esperimento sul file system ditribuito
     val VALIDATION_ANALYSIS_PATH  = "hdfs://localhost:9000/cp_output/als_rec_val"
-    val TRAINING_ANALYSIS_PATH    = "hdfs://localhost:9000/cp_output/als_rec_test"
+    val EVALUATION_ANALYSIS_PATH  = "hdfs://localhost:9000/cp_output/als_rec_eval"
 
-    wr.fillObject(VALIDATION_ANALYSIS_PATH , TRAINING_ANALYSIS_PATH)
+    val wr                        = new ALSDataWriter (spark)
+    wr.fillObject(VALIDATION_ANALYSIS_PATH , EVALUATION_ANALYSIS_PATH)
     wr.writeData(als._model.get, wrg._testSet.get)
 
   }
