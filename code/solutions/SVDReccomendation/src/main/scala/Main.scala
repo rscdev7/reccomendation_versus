@@ -68,10 +68,12 @@ object Main {
 
 
     //Test classe SVDTrainer
-    val LATENT_FACTORS  = 10
+    val LATENT_FACTORS  = Array(3,5,10,20)
     val svdTr           = new SVDTrainer ()
+    val eval            = new SVDEvaluator(spark, N_FILM)
 
-    svdTr.fit(wrg._trainingSet.get, wrg._validationSet.get, LATENT_FACTORS)
+    svdTr.fit(wrg._trainingSet.get, wrg._validationSet.get, LATENT_FACTORS, eval)
+
 
   }
 
