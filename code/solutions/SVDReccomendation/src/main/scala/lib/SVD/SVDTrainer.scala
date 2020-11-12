@@ -43,10 +43,11 @@ class SVDTrainer extends Serializable{
             _validationInfo += Tuple2(lfc, rmse)
         }
 
-        val bestModelIdx = _validationInfo.reduce ( (x,y) => { if (x._2 < y._2) x else y } )
+        val bestModelIdx    = _validationInfo.reduce ( (x,y) => { if (x._2 < y._2) x else y } )
+
+        _subModels          = Some(subModels)
+        _model              = Some ( subModels ( _validationInfo.indexOf( bestModelIdx ) ) )
 
 
-        _subModels = Some(subModels)
-        _model     = Some ( subModels ( _validationInfo.indexOf( bestModelIdx ) ) )
     }
 }

@@ -23,6 +23,7 @@ import org.apache.spark.sql._
 import lib.MovieLensLoader._
 import lib.SVDDataWrangler._
 import lib.SVD._
+import lib.SVDDataWriter._
 
 
 object Main {
@@ -34,7 +35,7 @@ object Main {
     import spark.implicits._
 
 
-    //Test Classe MovieLensLoader
+    //Caricamento dati
     val DATA_PATH                 = "hdfs://localhost:9000/dataset/ml-1m-csv/ratings.csv"
 
     val loader                    = new MovieLensLoader (DATA_PATH, spark)
@@ -57,7 +58,7 @@ object Main {
     loader._dataLake.get.printSchema()
 
 
-    //Test classe SVDDataWrangler
+    //Wrangling Dati
     val N_FILM = 3952
 
     val wrg = new SVDDataWrangler(spark, N_FILM)
@@ -67,12 +68,20 @@ object Main {
     wrg.printWranglingSpecs
 
 
-    //Test classe SVDTrainer
+    //Training e Validation
     val LATENT_FACTORS  = Array(3,5,10,20)
     val svdTr           = new SVDTrainer ()
     val eval            = new SVDEvaluator(spark, N_FILM)
 
     svdTr.fit(wrg._trainingSet.get, wrg._validationSet.get, LATENT_FACTORS, eval)
+
+
+    //Writing dati sul file system distribuito
+    val VALIDATION_ANALYSIS_PATH  = "hdfs://localhost:9000/cp_output/svd_rec_val"
+    val EVALUATION_ANALYSIS_PATH  = "hdfs://localhost:9000/cp_output/svd_rec_eval"
+    val writer        = new SVDDataWriter (spark, N_FILM, VALIDATION_ANALYSIS_PATH, EVALUATION_ANALYSIS_PATH)
+    
+    writer.write(svdTr._model.get,wrg._testSet.get,svdTr._validationInfo)
 
 
   }
