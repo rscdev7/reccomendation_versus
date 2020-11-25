@@ -18,18 +18,16 @@ import org.apache.spark.sql.functions._
 import org.apache.spark.sql.catalyst.expressions.GenericRowWithSchema
 import org.apache.spark.ml.linalg.Vector
 import org.apache.spark.ml.linalg.Vectors
-import org.apache.spark.ml.feature.BucketedRandomProjectionLSH
+import org.apache.spark.ml.linalg.Matrix
 import scala.collection.JavaConversions._
 import org.apache.spark.ml.stat._
 
 
-case class UtilityMatrixRec (val movie_id:Int, val _dataPoint:Vector)
-case class LinRegrDatasetRec (val features:Vector, val label:Double)
+case class LinRegrDatasetRec (val features:Vector   , val label:Double)
+case class SimVersusRec      (val _movieId:Int      , val _label:Int, val _sim:Double)
 
-
-class LRDataWrangler ( val _spark:SparkSession      ,   val _nUser:Int, 
-                       val _kNN:Int                 ,   val _datasetSavePath:String     ,
-                       val _bucketLen:Double        ,   val _nHashTables:Int            ,
+class LRDataWrangler ( val _spark:SparkSession      ,   val _nFilm:Int, 
+                       val _kNN:Long                ,   val _datasetSavePath:String     ,
                        val _nSplits:Int)                extends Serializable{
 
 
@@ -46,44 +44,40 @@ class LRDataWrangler ( val _spark:SparkSession      ,   val _nUser:Int,
 
 
         //Generazione Utility-Matrix
-        val augmented_dataset   = pDataset.withColumn ( "user_&_rating", struct ( pDataset("user_id") - 1 , pDataset("label")  ) )
+        val augmented_dataset   = pDataset.withColumn ( "film_&_rating", struct ( pDataset("movie_id") - 1 , pDataset("label")  ) )
 
 
         
-        val user_per_film       = augmented_dataset.groupBy (pDataset.col("movie_id")).agg(collect_list( "user_&_rating" ))
+        val user_per_film       = augmented_dataset.groupBy (augmented_dataset.col("user_id")).agg(collect_list( "film_&_rating" ))
 
     
         
-        val utilityMatrix       = user_per_film.map ( (record) => {
-                                                val pairsList = record.getSeq[GenericRowWithSchema](1)
-                                                
+        val utilityMatrixRDD    = user_per_film.rdd.map ( (record) => {
+                                                val pairsList       = record.getSeq[GenericRowWithSchema](1)
                                                 
                                                 val castedPairsList = pairsList.map ( (x) => Tuple2( x.asInstanceOf[Row].getInt(0), x.asInstanceOf[Row].getInt(1).toDouble ))
 
-                                                val v:Vector = Vectors.sparse(_nUser, castedPairsList)
+                                                val v:Vector = Vectors.sparse(_nFilm, castedPairsList)
 
-                                                UtilityMatrixRec (record.getInt(0) , v)
+                                                v
                                             })
+
+        val utilityMatrix       = utilityMatrixRDD.map(Tuple1.apply).toDF("features")
+
+
+
+        //Calcolo Matrice di Correlazione
+        val Row(coeff1: Matrix) = Correlation.corr(utilityMatrix, "features").head
+
 
 
         //Preparazione Strutture dati per il Wrangling
-        val selectedDataset     = pDataset.select("user_id", "movie_id", "label")
-        val augMentedDataset    = selectedDataset.join (utilityMatrix, "movie_id")
-        val reSelDataset        = augMentedDataset.select ("user_id", "movie_id", "label", "_dataPoint")
-        val shuffledDataset     = reSelDataset.repartition(_nSplits)
-
-        
-  
-        val brp                 = new BucketedRandomProjectionLSH()
-                                    .setBucketLength(_bucketLen)
-                                    .setNumHashTables(_nHashTables)
-                                    .setInputCol("_dataPoint")
-                                    .setOutputCol("hashes")
-
-        
+        val selectedDataset     = augmented_dataset.select("user_id", "movie_id", "label")
+        val shuffledDataset     = selectedDataset.repartition(_nSplits)
         val datasetIterator     = shuffledDataset.toLocalIterator
+        //val record            = datasetIterator.next
         var linRegreDataset     = Seq.empty[LinRegrDatasetRec].toDS()
-
+        
 
 
         //Wrangling - a.k.a. costruzione dataset per il regressore lineare
@@ -93,42 +87,66 @@ class LRDataWrangler ( val _spark:SparkSession      ,   val _nUser:Int,
             val currentUser             = record.getInt(0)
             val currentFilm             = record.getInt(1)
             val currentLabel            = record.getInt(2)
-            val currentKey              = record.getAs[Vector](3)
 
 
             //Prelievo film visti dall'utente diversi da quello in esame
             val filteredDataset         = shuffledDataset.filter ( (x) => (x.getInt(0) == currentUser && x.getInt(1) != currentFilm) )
 
-            val osservationMatrixSketch = filteredDataset.select ( "movie_id" , "label" )
+            val nRecord                 = filteredDataset.count
 
 
-            //Calcolo Approssimato del K-NN
-            val searchRegion            = utilityMatrix.join(osservationMatrixSketch, utilityMatrix("movie_id") === osservationMatrixSketch("movie_id"), "leftsemi")
+            nRecord match {
+                case i if i >= _kNN => {
 
-            val model = brp.fit(searchRegion)
-            model.transform(searchRegion)
+                                //Selezione Campi Utili dal dataset filtrato
+                                val osservationMatrixSketch                 = filteredDataset.select ( "movie_id" , "label" )
 
-            val approxNN                = model.approxNearestNeighbors(searchRegion, currentKey, _kNN)
             
+                                //Calcolo Approssimato del K-NN
+                                val key                                     = currentFilm-1
+                                val augMatrixSketch                         = osservationMatrixSketch.withColumn ("sim", lit(0.0))
 
-            //Estrazione feature per l'i-esimo record
-            val linearRegressionFeatures = osservationMatrixSketch.join(approxNN, osservationMatrixSketch("movie_id") === approxNN("movie_id"), "leftsemi")
-
-            val features                = linearRegressionFeatures.select("label")
-
-            val featuresArray           = features.collect
-
-            val unWrapFeatureArray      = featuresArray.map ( (x) => x.getInt(0).toDouble )
-
-            val featureVector           = Vectors.dense(unWrapFeatureArray)
-
-            val finalRec                = LinRegrDatasetRec (featureVector, currentLabel)
+            
+                                val simMatrixSkecth                         = augMatrixSketch.map ( (x) => SimVersusRec (x.getInt(0), x.getInt(1), coeff1(key, x.getInt(0)-1 ) ) )
 
 
-            //Memorizzazione record nel dataset finale
-            val recDataset              = Seq(finalRec).toDS()
-            linRegreDataset             = linRegreDataset.union(recDataset)
-                  
+                                val notNaNsimMatrix                         = simMatrixSkecth.na.drop
+
+
+                                val nRecSim                                 = notNaNsimMatrix.count
+
+
+
+                                nRecSim match {
+                                    case i if i>=_kNN => {
+                                                    val orderedSketch = notNaNsimMatrix.sort($"_sim".desc)
+                                                    val labelSketch   = orderedSketch.select(orderedSketch.col("_label"))
+                                                    val knn           = labelSketch.take(_kNN.toInt)
+
+
+                                                    //Estrazione feature per l'i-esimo record
+                                                    val unWrapFeatureArray      = knn.map ( (x) => x.getInt(0).toDouble )
+
+                                                    val featureVector           = Vectors.dense(unWrapFeatureArray)
+
+                                                    val finalRec                = LinRegrDatasetRec (featureVector, currentLabel)
+
+
+                                                    //Memorizzazione record nel dataset finale
+                                                    val recDataset              = Seq(finalRec).toDS()
+                                                    linRegreDataset             = linRegreDataset.union(recDataset)
+
+                                            }
+
+                                    case _ => println ("\n\n\n[!] Skipped Record for NaN\n\n\n")
+                                }
+
+                                
+                            }
+                case _ => println ("\n\n\n[!] Skipped Record for low Viewed Film\n\n\n")
+            }
+
+            
         }
 
 
@@ -138,6 +156,7 @@ class LRDataWrangler ( val _spark:SparkSession      ,   val _nUser:Int,
         //Memorizzazione del dataset all'interno dell'oggetto corrente
         _wrangleSet                     = Some(linRegreDataset)
 
+        
     }
 
     

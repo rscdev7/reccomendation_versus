@@ -29,7 +29,7 @@ object Main {
   def main(args: Array[String]): Unit = {
 
     //Creazione Spark Session
-    val spark = SparkSession.builder.appName("LRReccomendation").getOrCreate()
+    val spark = SparkSession.builder.appName("LRReccomendation-LSH").getOrCreate()
     import spark.implicits._
 
 
@@ -57,13 +57,17 @@ object Main {
 
 
     //Wrangling Dati
-    val N_FILM                  = 3952
-    val K_NN:Long               = 150
+    val N_USER                  = 6040
+    val K_NN                    = 2
     val SAVE_PATH               = "hdfs://localhost:9000/dataset/ml-1m-csv/lin_regr_dataset__nn_" + K_NN.toString +"/"
-    val N_SPLITS                = 10
+    val BUCKET_LENGTH:Double    = 2.0
+    val N_HASH_TABLES           = 3
+    val N_SPLITS                = 10000
 
-    val wrg = new LRDataWrangler(spark, N_FILM, K_NN, SAVE_PATH, N_SPLITS)
+    println (s"\n\n-> Dataset Save Path: ${SAVE_PATH} \n\n")
 
+
+    val wrg = new LRDataWrangler(spark, N_USER, K_NN, SAVE_PATH, BUCKET_LENGTH, N_HASH_TABLES, N_SPLITS)
 
     wrg.wrangle(loader._dataLake.get)
 
