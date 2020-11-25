@@ -82,7 +82,7 @@ object Main {
 
     val wr                        = new ALSDataWriter (spark)
     wr.fillObject(VALIDATION_ANALYSIS_PATH , EVALUATION_ANALYSIS_PATH)
-    wr.writeData(als._model.get, wrg._testSet.get, wrg._validation.get)
+    wr.writeData(als._model.get, wrg._testSet.get)
 
   }
 

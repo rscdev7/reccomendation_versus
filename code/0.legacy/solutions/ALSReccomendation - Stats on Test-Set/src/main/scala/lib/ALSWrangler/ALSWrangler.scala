@@ -26,17 +26,14 @@ import org.apache.spark.sql._
 class ALSWrangler  {
 
     var _trainingSet:Option[Dataset[Row]]           = None
-    var _validation:Option[Dataset[Row]]            = None
     var _testSet:Option[Dataset[Row]]               = None
     var _originalDatasetLen:Long                    = -1
     
 
     def wrangle (pDataLake:Dataset[Row]): Unit = {
         val arr:Array[Dataset[Row]] = pDataLake.randomSplit(Array(0.8, 0.2), seed=2014554)
-        val trainVal                = arr(0).randomSplit(Array(0.8, 0.2), seed=2014554)
 
         _trainingSet                = Some(arr(0))
-        _validation                 = Some(trainVal(1))
         _testSet                    = Some(arr(1))
 
         _originalDatasetLen         = pDataLake.count
@@ -46,7 +43,6 @@ class ALSWrangler  {
         println (s"""\n***************** DATASET SPLITS ************************ \n
         |-> Original Dataset Len: ${_originalDatasetLen} \n 
         |-> Training-Set Len: ${_trainingSet.get.count} \n 
-        |-> Validation-Set Len: ${_validation.get.count}                     \n
         |-> Test-Set Len: ${_testSet.get.count} 
         |\n******************************************************** """.stripMargin)
     }

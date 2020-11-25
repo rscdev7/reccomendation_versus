@@ -48,7 +48,7 @@ class ALSDataWriter (val _spark:SparkSession) {
     }
 
     
-    def writeData (pModelValidator: CrossValidatorModel, pTestSet:Dataset[Row], pValidation:Dataset[Row]) = {
+    def writeData (pModelValidator: CrossValidatorModel, pTestSet:Dataset[Row]) = {
 
         //Writing Validation Info
         var validation_tmp_data         = Seq.empty[ValidationRecord].toDS()
@@ -73,7 +73,7 @@ class ALSDataWriter (val _spark:SparkSession) {
                 val rank                = rankBuffer(0).asInstanceOf[Int]
 
             
-                val res                 = m.transform (pValidation)
+                val res                 = m.transform (pTestSet)
 
                 val evaluator           = new RegressionEvaluator()
                                                 .setMetricName("rmse")
