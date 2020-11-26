@@ -21,11 +21,11 @@ import scala.concurrent._
 import scala.reflect._
 
 import org.apache.spark.sql._
-import org.apache.spark.ml.tuning.{CrossValidatorModel}
+import org.apache.spark.ml.tuning._
 import org.apache.spark.ml.evaluation.RegressionEvaluator
 
 
-case class ValidationRecord (val NumIterations:Int, val Regularization:Double, val Rank:Int, val Fold:Int, val RMSE:Double)
+case class ValidationRecord (val NumIterations:Int, val Regularization:Double, val Rank:Int, val RMSE:Double)
 case class EvaluationRecord (val NumIterations:Int, val Regularization:Double, val Rank:Int, val RMSE:Double)
 
 
@@ -48,48 +48,47 @@ class ALSDataWriter (val _spark:SparkSession) {
     }
 
     
-    def writeData (pModelValidator: CrossValidatorModel, pTestSet:Dataset[Row], pValidation:Dataset[Row]) = {
+    def writeData (pModelValidator: TrainValidationSplitModel, pTestSet:Dataset[Row], pValidation:Dataset[Row]) = {
 
         //Writing Validation Info
         var validation_tmp_data         = Seq.empty[ValidationRecord].toDS()
         val models                      = pModelValidator.subModels
         
 
-        for ( fold <- List.range(0,models.length) ) {
             
-            models(fold).map ( (m) => {
+        models.foreach ( (m) => {
 
-                val pairs               = m.parent.extractParamMap.toSeq
-
-                
-                val maxIterBuffer       = pairs.filter ( (pair) => pair.param.name == "maxIter").map ((x) => x.value)
-                val maxIter             = maxIterBuffer(0).asInstanceOf[Int]
-
-                
-                val regParamBuffer      = pairs.filter ( (pair) => pair.param.name == "regParam").map ((x) => x.value)
-                val regParam            = regParamBuffer(0).asInstanceOf[Double]
-
-                val rankBuffer          = pairs.filter ( (pair) => pair.param.name == "rank").map ((x) => x.value)
-                val rank                = rankBuffer(0).asInstanceOf[Int]
+            val pairs               = m.parent.extractParamMap.toSeq
 
             
-                val res                 = m.transform (pValidation)
+            val maxIterBuffer       = pairs.filter ( (pair) => pair.param.name == "maxIter").map ((x) => x.value)
+            val maxIter             = maxIterBuffer(0).asInstanceOf[Int]
 
-                val evaluator           = new RegressionEvaluator()
-                                                .setMetricName("rmse")
-                                                .setLabelCol("label")
-                                                .setPredictionCol("prediction")
+            
+            val regParamBuffer      = pairs.filter ( (pair) => pair.param.name == "regParam").map ((x) => x.value)
+            val regParam            = regParamBuffer(0).asInstanceOf[Double]
 
-                val rmse                = evaluator.evaluate(res)
+            val rankBuffer          = pairs.filter ( (pair) => pair.param.name == "rank").map ((x) => x.value)
+            val rank                = rankBuffer(0).asInstanceOf[Int]
 
-
-                val new_record          = Seq(ValidationRecord(maxIter, regParam, rank, fold, rmse)).toDS()
-                validation_tmp_data     = validation_tmp_data.union(new_record)
-                
-            } )
-        }
         
-        _validationData                 =  Some(validation_tmp_data)    
+            val res                 = m.transform (pValidation)
+
+            val evaluator           = new RegressionEvaluator()
+                                            .setMetricName("rmse")
+                                            .setLabelCol("label")
+                                            .setPredictionCol("prediction")
+
+            val rmse                = evaluator.evaluate(res)
+
+
+            val new_record          = Seq(ValidationRecord(maxIter, regParam, rank, rmse)).toDS()
+            validation_tmp_data     = validation_tmp_data.union(new_record)
+            
+        } )
+        
+        
+        _validationData             =  Some(validation_tmp_data)    
         _validationData.get.write.format("csv").option("header",true).save(_validationDataPath.get)
 
 

@@ -3,10 +3,15 @@
 
 #### **Code Dependancies:**
 > **Dependancies:**
-> * N/D
+> * MovieLensLoader
+> * SVDEngine
+> * SVDEvaluator
+> * SVDTrainer
+> * SVDDataWrangler
+> * SVDDataWriter
 
 -----
 
 #### **Data Dependancies:**
 > **Dependancies:**
-> * N/D
+> * `$HDFS:/dataset/ml-1m-csv/ratings.csv`, dataset contenente i rating degli utenti dati ai film.

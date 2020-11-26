@@ -2,9 +2,11 @@
 
 
 #### **Code Dependencies:**
-> * N/D
+> * LSH
+> * LSHEvaluator
+> * MovieLensLoader
 
 -----
 
 #### **Data Dependencies:**
-> * N/D
+> * `$HDFS:/dataset/ml-1m-csv/ratings.csv`, dataset contenente i rating degli utenti dati ai film.

@@ -1,5 +1,8 @@
 # ALSReccomendation
 
+> **v2.5.0**
+>	* Bux-fix sulla funzionalità di misurazione performance sul validation-set.
+
 > **v2.2.0**
 >	* Aggiunta la possibilità di misurare e archiviare su file le performance dei modelli sul Validation-Set.
 

@@ -66,13 +66,13 @@ object Main {
 
     
     //Training Modello LFM sfruttando l'algoritmo ALS
-    val SEED:Long                 = 12345678
+    val SEED:Long                 = 2014554
     val MAX_ITER                  = Array (5,10,20)
     val REG_PARAM                 = Array (0.99,0.90,0.80)
     val RANK                      = Array (5,10,20)
-    val FOLD                      = 10
+
     
-    val als                       = new ALSTrainer(MAX_ITER, REG_PARAM, RANK, FOLD, SEED ,"user_id", "movie_id","label")
+    val als                       = new ALSTrainer(MAX_ITER, REG_PARAM, RANK, SEED ,"user_id", "movie_id","label")
     als.train( wrg._trainingSet.get )
 
 

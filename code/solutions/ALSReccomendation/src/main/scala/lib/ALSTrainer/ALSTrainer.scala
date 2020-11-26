@@ -25,16 +25,17 @@ import scala.reflect._
 import org.apache.spark.sql._
 import org.apache.spark.ml.recommendation.ALS
 import org.apache.spark.ml.evaluation.RegressionEvaluator
-import org.apache.spark.ml.tuning.{ParamGridBuilder, CrossValidator, CrossValidatorModel}
+import org.apache.spark.ml.tuning._
 
 
-class ALSTrainer (val _iterations:Array[Int], val _regularization:Array[Double], 
-                  val _rank:Array[Int]     , val _fold:Int, 
-                  val _seed:Long            , val _userCol:String, 
-                  val _itemCol:String       , val _ratingCol:String 
+class ALSTrainer (val _iterations:Array[Int]    ,  val _regularization:Array[Double] , 
+                  val _rank:Array[Int]          ,  val _seed:Long                   , 
+                  val _userCol:String           ,  val _itemCol:String        , 
+                  val _ratingCol:String 
                  ) {
 
-    var _model:Option[CrossValidatorModel] = None
+
+    var _model:Option[TrainValidationSplitModel] = None
 
 
     def train (pDataset:Dataset[Row]) = {
@@ -58,17 +59,18 @@ class ALSTrainer (val _iterations:Array[Int], val _regularization:Array[Double],
         ev.setMetricName("rmse")
  
 
-        val cv        = new CrossValidator()
+        val eng        = new TrainValidationSplit()
                             .setCollectSubModels(true)
                             .setEstimator(model)
                             .setEvaluator(ev)
                             .setEstimatorParamMaps(paramGrid)
-                            .setNumFolds(_fold)  
                             .setParallelism(8) 
+                            .setSeed(_seed)
+                            .setTrainRatio(0.80)
                            
 
 
-        _model        = Some( cv.fit(pDataset) )
+        _model        = Some( eng.fit(pDataset) )
     }
 
 
