@@ -5,6 +5,7 @@
 > * LSH
 > * LSHEvaluator
 > * MovieLensLoader
+> * LSHWrangler
 
 -----
 

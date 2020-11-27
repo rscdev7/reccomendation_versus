@@ -21,6 +21,7 @@ import scala.reflect._
 import org.apache.spark.sql._
 
 import lib.MovieLensLoader._
+import lib.LSHWrangler._
 import lib.LSH._
 import lib.LSHEvaluator._
 
@@ -58,15 +59,22 @@ object Main {
 
 
 
+    //Wrangling
+    val wrg                     = new LSHWrangler
+    wrg.wrangle(loader._dataLake.get)
+    wrg.printDataSplitsProperties
+
+
+
     //Fitting LSH Model
     val N_USER                  = 6040
-    val DIST_THR                = 40
-    val BUCKET_LENGTH:Double    = 2.0
-    val N_HASH_TABLES           = 3
+    val DIST_THR                = 70
+    val BUCKET_LENGTH:Double    = 4.0
+    val N_HASH_TABLES           = 5
 
-    val lsh = new LSH(spark, N_USER, DIST_THR, BUCKET_LENGTH, N_HASH_TABLES)
+    val lsh                     = new LSH(spark, N_USER, DIST_THR, BUCKET_LENGTH, N_HASH_TABLES)
 
-    lsh.fit(loader._dataLake.get)
+    lsh.fit(wrg._trainingSet.get)
 
     
 
@@ -80,8 +88,7 @@ object Main {
     val evaluator                 = new LSHEvaluator(spark, SAVE_PATH, SPLITS)
 
 
-    //evaluator.evaluate(loader._dataLake.get, lsh._model.get)
-    evaluator.parallelEvaluate(loader._dataLake.get, lsh._model.get)
+    evaluator.parallelEvaluate(wrg._trainingSet.get, wrg._testSet.get ,lsh._model.get)
     evaluator.write (BUCKET_LENGTH, N_HASH_TABLES, DIST_THR)
     
 

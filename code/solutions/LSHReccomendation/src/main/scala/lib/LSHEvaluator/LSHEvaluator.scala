@@ -35,88 +35,25 @@ class LSHEvaluator (val _spark:SparkSession, val _savePath:String, val _splits:I
     var _errors:Option[Dataset[Double]] = None
 
 
-    def evaluate (pDataset:Dataset[Row], pModel:Dataset[Row]) = {
-        
-        println ("\n\n\n\n\n\n\n ************ START EVAL ************* \n\n\n\n\n\n\n ")
 
-        val dtIterator  = pDataset.toLocalIterator
-        val record      = dtIterator.next
-        var err         = Seq.empty[Double].toDS()
-
-
-        for (record <- dtIterator) {
-
-            println ("\n\n\n\n RECORD PROCESSING \n\n\n\n")
-
-            //Retrieve Information from Record
-            val userId                          = record.getInt(0)
-            val filmId                          = record.getInt(1)
-            val rating                          = record.getInt(2)
-
-
-            //Guardo al Vicinato della coppia (Utente_x, Film_x)
-            val userRatedFilms                  = pDataset.filter ( (x) => x.getInt(0) == userId && x.getInt(1) != filmId ).select (col("movie_id"), col("label") )
-            val userRatedLSH                    = pModel.filter ((x) => x.getInt(0) == filmId)
-
-            //Prelevo i Film che voteranno per l'inferenza
-            val inferenceSource                 = userRatedFilms.join(userRatedLSH, userRatedFilms("movie_id") === userRatedLSH("idB"), "leftsemi")
-
-
-            val numberOfVotes                   = inferenceSource.count
-            var wrappedMean:Option[Array[Row]]  = None
-
-
-            //[?] Check if there are LSH Voters 
-            numberOfVotes match {
-                case i if i>0 => {
-
-                    //Retrieving Mean of Voters
-                    wrappedMean                 = Some(inferenceSource.agg(avg ("label")).collect)
-                     
-                }
-
-                case i if i<=0 => {
-                    wrappedMean                 = Some(userRatedFilms.agg(avg ("label")).collect)
-                }
-            }
-
-
-            //Compunting Squared Error
-            val inferenceRating                 = wrappedMean.get(0).getDouble(0)
-            val diff                            = rating - inferenceRating
-            val sq_diff                         = math.pow(diff,2)
-
-
-            //Mergin on Accumulator
-            val dtDiff                          = Seq(sq_diff).toDS()
-            err                                 = err.union (dtDiff)
-
-        }
-
-
-        _errors                                 = Some(err)
-                                                          
-    }
-
-
-    def parallelEvaluate (pDataset:Dataset[Row], pModel:Dataset[Row]) = {
+    def parallelEvaluate (pDataLake:Dataset[Row], pTestSet:Dataset[Row] ,pModel:Dataset[Row]) = {
         import scala.collection.mutable._
 
-        //Per ogni Tripla (U,F,R) rendo esplicito i film valutati dall'Utente presente nell'n-esimo record
+        //Per ogni Tripla (U,F,R) del Test-Set rendo esplicito i film valutati dall'Utente presente nell'n-esimo record
         // (U,F,R) ---> (F,R) , ...., (F,R)
-        val augmented_dataset               = pDataset.withColumn ( "film_&_rating", struct ( pDataset("movie_id") , pDataset("label")  ) )
+        val augmented_dataset               = pDataLake.withColumn ( "film_&_rating", struct ( pDataLake("movie_id") , pDataLake("label")  ) )
 
         val groupedDtUser                   = augmented_dataset.groupBy (augmented_dataset.col("user_id")).agg(collect_list( "film_&_rating" ).as("candidateSim"))
 
-        val res                             = pDataset.join (groupedDtUser, "user_id").select("user_id","movie_id","label","candidateSim")
+        val res                             = pTestSet.join (groupedDtUser, "user_id").select("user_id","movie_id","label","candidateSim")
 
 
-        //Per ogni Tripla (U,F,R) assegno il corrispettivo cluster LSH
+        //Per ogni Tripla (U,F,R) del Test-Set assegno il corrispettivo cluster LSH di Film
         // (U,F,R) ---> (F,R) , ...., (F,R) | F, ...., F
         val groupedModel                    = pModel.groupBy (col("idA")).agg (collect_list("idB").as("candidateLSH"))
         val renamedGroupedModel             = groupedModel.select ( col("idA").as("movie_id") , col("candidateLSH") )
 
-        val parallelDataset                 = res.join (renamedGroupedModel, "movie_id")
+        val parallelDataset                 = res.join (renamedGroupedModel, Seq("movie_id"), "left")
 
 
 
@@ -126,15 +63,17 @@ class LSHEvaluator (val _spark:SparkSession, val _savePath:String, val _splits:I
                                                 val film                    = x.getInt(1)
                                                 val rating                  = x.getInt(2)
 
+                                                //Retrieving User Rated Films except current ----> (M,R) , (M,R)
                                                 val rowCandidateSim         = x.getSeq[GenericRowWithSchema](3)
                                                 val candidateSim            = rowCandidateSim.map ( (x) => Tuple2( x.asInstanceOf[Row].getInt(0), x.asInstanceOf[Row].getInt(1) ) ).par
-
-                                                val candidateLSH            = x.getAs[WrappedArray[Int]](4).par
-
-
-
-                                                //Guardo al Vicinato della coppia (Utente_x, Film_x)
                                                 val filteredCandidateSim    = candidateSim.filter ( (x) => x._1 != film)
+
+
+                                                //Controllo presenza film nel bucket associato al film attuale
+                                                val candidateLSH            = x.isNullAt(4) match {
+                                                    case true  => Array[Int]().par
+                                                    case false => x.getAs[WrappedArray[Int]](4).par
+                                                }
 
 
 
@@ -161,19 +100,19 @@ class LSHEvaluator (val _spark:SparkSession, val _savePath:String, val _splits:I
                                                         val concreteNumericVoters   = concreteVoters.map ((x) => x._2)
 
 
-                                                        val sum                          = concreteNumericVoters.sum
-                                                        val len                          = concreteNumericVoters.length
+                                                        val sum                      = concreteNumericVoters.sum
+                                                        val len                      = concreteNumericVoters.length
 
 
                                                         //Retrieving Mean of Voters
-                                                        wrappedMean                     = Some(sum/len)
+                                                        wrappedMean                  = Some(sum/len)
                                                         
                                                     }
 
                                                     case i if i<=0 => {
-                                                        val sum                          = filteredCandidateSim.map((x) => x._2).sum
-                                                        val len                          = filteredCandidateSim.length
-                                                        wrappedMean                      = Some( sum/len )
+                                                        val sum                       = filteredCandidateSim.map((x) => x._2).sum
+                                                        val len                       = filteredCandidateSim.length
+                                                        wrappedMean                   = Some( sum/len )
                                                     }
                                                 }
 
